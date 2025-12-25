@@ -2,6 +2,9 @@ import Event from '../models/Event.js';
 import Poll from '../models/Poll.js';
 import User from '../models/User.js';
 
+/**
+ * CREATE EVENT
+ */
 export const createEvent = async (eventData, creatorId) => {
   const { title, description, dateOptions, pollQuestion, pollOptions } = eventData;
 
@@ -24,9 +27,13 @@ export const createEvent = async (eventData, creatorId) => {
 
   return await Event.findById(event._id)
     .populate('creator', 'name email')
+    .populate('participants.user', 'name email')
     .populate('poll');
 };
 
+/**
+ * GET EVENT BY ID
+ */
 export const getEventById = async (eventId) => {
   const event = await Event.findById(eventId)
     .populate('creator', 'name email')
@@ -34,12 +41,17 @@ export const getEventById = async (eventId) => {
     .populate('poll');
 
   if (!event) {
-    throw new Error('Event not found');
+    const err = new Error('Event not found');
+    err.status = 404;
+    throw err;
   }
 
   return event;
 };
 
+/**
+ * GET USER EVENTS (created + participating)
+ */
 export const getUserEvents = async (userId) => {
   const createdEvents = await Event.find({ creator: userId })
     .populate('poll')
@@ -56,15 +68,22 @@ export const getUserEvents = async (userId) => {
   return { createdEvents, participatingEvents };
 };
 
+/**
+ * UPDATE EVENT
+ */
 export const updateEvent = async (eventId, updateData, userId) => {
   const event = await Event.findById(eventId);
 
   if (!event) {
-    throw new Error('Event not found');
+    const err = new Error('Event not found');
+    err.status = 404;
+    throw err;
   }
 
-  if (event.creator.toString() !== userId) {
-    throw new Error('Not authorized to update this event');
+  if (event.creator.toString() !== userId.toString()) {
+    const err = new Error('Not authorized to update this event');
+    err.status = 403;
+    throw err;
   }
 
   Object.assign(event, updateData);
@@ -72,18 +91,26 @@ export const updateEvent = async (eventId, updateData, userId) => {
 
   return await Event.findById(eventId)
     .populate('creator', 'name email')
+    .populate('participants.user', 'name email')
     .populate('poll');
 };
 
+/**
+ * DELETE EVENT
+ */
 export const deleteEvent = async (eventId, userId) => {
   const event = await Event.findById(eventId);
 
   if (!event) {
-    throw new Error('Event not found');
+    const err = new Error('Event not found');
+    err.status = 404;
+    throw err;
   }
 
-  if (event.creator.toString() !== userId) {
-    throw new Error('Not authorized to delete this event');
+  if (event.creator.toString() !== userId.toString()) {
+    const err = new Error('Not authorized to delete this event');
+    err.status = 403;
+    throw err;
   }
 
   await Poll.findByIdAndDelete(event.poll);
@@ -92,21 +119,30 @@ export const deleteEvent = async (eventId, userId) => {
   return { message: 'Event deleted successfully' };
 };
 
+/**
+ * INVITE USER
+ */
 export const inviteUser = async (eventId, inviteeEmail, inviterId) => {
   const event = await Event.findById(eventId);
 
   if (!event) {
-    throw new Error('Event not found');
+    const err = new Error('Event not found');
+    err.status = 404;
+    throw err;
   }
 
-  if (event.creator.toString() !== inviterId) {
-    throw new Error('Only event creator can invite users');
+  if (event.creator.toString() !== inviterId.toString()) {
+    const err = new Error('Only event creator can invite users');
+    err.status = 403;
+    throw err;
   }
 
   const invitee = await User.findOne({ email: inviteeEmail });
 
   if (!invitee) {
-    throw new Error('User not found');
+    const err = new Error('User not found');
+    err.status = 404;
+    throw err;
   }
 
   const alreadyParticipant = event.participants.some(
@@ -114,7 +150,9 @@ export const inviteUser = async (eventId, inviteeEmail, inviterId) => {
   );
 
   if (alreadyParticipant) {
-    throw new Error('User is already a participant');
+    const err = new Error('User is already a participant');
+    err.status = 400;
+    throw err;
   }
 
   const alreadyInvited = invitee.invitations.some(
@@ -122,7 +160,9 @@ export const inviteUser = async (eventId, inviteeEmail, inviterId) => {
   );
 
   if (alreadyInvited) {
-    throw new Error('User already has a pending invitation');
+    const err = new Error('User already has a pending invitation');
+    err.status = 400;
+    throw err;
   }
 
   invitee.invitations.push({
@@ -135,7 +175,16 @@ export const inviteUser = async (eventId, inviteeEmail, inviterId) => {
   return { message: 'Invitation sent successfully' };
 };
 
+/**
+ * RESPOND TO INVITATION
+ */
 export const respondToInvitation = async (eventId, userId, response) => {
+  if (!['accepted', 'rejected'].includes(response)) {
+    const err = new Error('Invalid invitation response');
+    err.status = 400;
+    throw err;
+  }
+
   const user = await User.findById(userId);
 
   const invitation = user.invitations.find(
@@ -143,15 +192,19 @@ export const respondToInvitation = async (eventId, userId, response) => {
   );
 
   if (!invitation) {
-    throw new Error('Invitation not found');
+    const err = new Error('Invitation not found');
+    err.status = 404;
+    throw err;
   }
 
   invitation.status = response;
 
   if (response === 'accepted') {
     const event = await Event.findById(eventId);
-    event.participants.push({ user: userId });
-    await event.save();
+    if (!event.participants.some(p => p.user.toString() === userId.toString())) {
+      event.participants.push({ user: userId });
+      await event.save();
+    }
   }
 
   await user.save();
