@@ -87,6 +87,7 @@ export const getEventByIdController = async (req, res) => {
   }
 };
 
+
 // Other controllers remain the same (createEventController, updateEventController, etc.)
 export const getEventById = async (eventId) => {
   const event = await Event.findById(eventId)

@@ -30,10 +30,8 @@ export const createEvent = async (eventData, creatorId) => {
     .populate('participants.user', 'name email')
     .populate('poll');
 };
+import Event from '../models/Event.js';
 
-/**
- * GET EVENT BY ID
- */
 export const getEventById = async (eventId) => {
   const event = await Event.findById(eventId)
     .populate('creator', 'name email')
@@ -48,6 +46,10 @@ export const getEventById = async (eventId) => {
 
   return event;
 };
+
+/**
+ * GET EVENT BY ID
+
 
 /**
  * GET USER EVENTS (created + participating)
@@ -211,3 +213,5 @@ export const respondToInvitation = async (eventId, userId, response) => {
 
   return { message: `Invitation ${response}` };
 };
+import Event from '../models/Event.js';
+
