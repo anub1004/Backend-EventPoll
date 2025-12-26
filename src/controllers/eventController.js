@@ -95,3 +95,22 @@ export const getEventByIdController = async (req, res) => {
 };
 
 // Other controllers remain the same (createEventController, updateEventController, etc.)
+export const getEventById = async (eventId) => {
+  const event = await Event.findById(eventId)
+    .populate('creator', 'name email')
+    .populate('participants.user', 'name email')
+    .populate('poll');
+
+  if (!event) {
+    const err = new Error('Event not found');
+    err.status = 404;
+    throw err;
+  }
+
+  // Optional: Ensure poll always has options
+  if (event.poll) {
+    event.poll.options = event.poll.options || [];
+  }
+
+  return event;
+};
