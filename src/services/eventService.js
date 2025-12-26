@@ -1,112 +1,97 @@
-import * as eventService from '../services/eventService.js';
-import { check, validationResult } from 'express-validator';
-
-export async function createEventController(req, res) {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    // ✅ call service function, not controller
-    const event = await eventService.createEvent(req.body, req.user._id);
-
-    res.status(201).json({ success: true, data: event });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-}
-
-export async function getEventController(req, res) {
-  try {
-    const event = await eventService.getEventById(req.params.id);
-    res.status(200).json({ success: true, data: event });
-  } catch (error) {
-    res.status(404).json({ success: false, message: error.message });
-  }
-}
-
-export async function getUserEventsController(req, res) {
-  try {
-    const events = await eventService.getUserEvents(req.user._id);
-    res.status(200).json({ success: true, data: events });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-}
-
-export async function updateEventController(req, res) {
-  try {
-    const event = await eventService.updateEvent(req.params.id, req.body, req.user._id);
-    res.status(200).json({ success: true, data: event });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-}
-
-export async function deleteEventController(req, res) {
-  try {
-    const result = await eventService.deleteEvent(req.params.id, req.user._id);
-    res.status(200).json({ success: true, data: result });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-}
-
-export async function inviteUserController(req, res) {
-  try {
-    const result = await eventService.inviteUser(req.params.id, req.body.email, req.user._id);
-    res.status(200).json({ success: true, data: result });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-}
-
-export async function respondToInvitationController(req, res) {
-  try {
-    const result = await eventService.respondToInvitation(req.params.id, req.user._id, req.body.response);
-    res.status(200).json({ success: true, data: result });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-}
-
-
-
-// controllers/eventController.js
 import Event from '../models/Event.js';
+import Poll from '../models/Poll.js';
+import User from '../models/User.js';
 
-
-
-export const getEventByIdController = async (req, res) => {
-  try {
-    const event = await getEventById(req.params.id);
-    res.status(200).json({ status: 'success', data: event });
-  } catch (err) {
-    res.status(err.status || 500).json({ status: 'error', message: err.message });
-  }
+// Create Event
+export const createEvent = async (data, userId) => {
+  const event = new Event({ ...data, creator: userId });
+  return await event.save();
 };
 
-
-// Other controllers remain the same (createEventController, updateEventController, etc.)
+// Get single event by ID
 export const getEventById = async (eventId) => {
   const event = await Event.findById(eventId)
     .populate('creator', 'name email')
     .populate('participants.user', 'name email')
     .populate('poll');
 
-  if (!event) {
-    const err = new Error('Event not found');
-    err.status = 404;
-    throw err;
-  }
-
-  // Optional: Ensure poll always has options
-  if (event.poll) {
-    event.poll.options = event.poll.options || [];
-  }
-
+  if (!event) throw { status: 404, message: 'Event not found' };
   return event;
 };
 
+// Get all events for a user
+export const getUserEvents = async (userId) => {
+  const events = await Event.find({ creator: userId })
+    .populate('creator', 'name email')
+    .populate('participants.user', 'name email')
+    .populate('poll')
+    .sort({ createdAt: -1 });
+  return events;
+};
 
+// Update Event
+export const updateEvent = async (eventId, data, userId) => {
+  const event = await Event.findOneAndUpdate(
+    { _id: eventId, creator: userId },
+    data,
+    { new: true }
+  );
+  if (!event) throw { status: 404, message: 'Event not found or not authorized' };
+  return event;
+};
+
+// Delete Event
+export const deleteEvent = async (eventId, userId) => {
+  const event = await Event.findOneAndDelete({ _id: eventId, creator: userId });
+  if (!event) throw { status: 404, message: 'Event not found or not authorized' };
+  return { message: 'Event deleted successfully' };
+};
+
+// Invite User
+export const inviteUser = async (eventId, email, creatorId) => {
+  const user = await User.findOne({ email });
+  if (!user) throw { status: 404, message: 'User not found' };
+
+  const event = await Event.findById(eventId);
+  if (!event) throw { status: 404, message: 'Event not found' };
+  if (event.creator.toString() !== creatorId) throw { status: 403, message: 'Not authorized' };
+
+  // Check if already invited
+  if (event.participants.some(p => p.user.toString() === user._id.toString()))
+    throw { status: 400, message: 'User already invited' };
+
+  event.participants.push({ user: user._id });
+  await event.save();
+
+  return { message: `Invitation sent to ${user.email}` };
+};
+
+// Respond to Invitation
+export const respondToInvitation = async (eventId, userId, response) => {
+  const event = await Event.findById(eventId);
+  if (!event) throw { status: 404, message: 'Event not found' };
+
+  const participant = event.participants.find(p => p.user.toString() === userId);
+  if (!participant) throw { status: 403, message: 'Not invited to this event' };
+
+  participant.status = response; // 'accepted' or 'rejected'
+  await event.save();
+
+  return { message: `You have ${response} the invitation` };
+};
+
+// Poll Voting
+export const votePoll = async (pollId, optionIndex, userId) => {
+  const poll = await Poll.findById(pollId);
+  if (!poll) throw { status: 404, message: 'Poll not found' };
+
+  // Remove vote if already voted
+  poll.options.forEach(opt => {
+    opt.votes = opt.votes.filter(v => v.toString() !== userId);
+  });
+
+  poll.options[optionIndex].votes.push(userId);
+  await poll.save();
+
+  return poll;
+};
