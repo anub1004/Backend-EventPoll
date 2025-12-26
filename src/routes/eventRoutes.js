@@ -11,7 +11,8 @@ router.post('/add', authMiddleware, eventController.createEventController);
 router.get('/', authMiddleware, eventController.getUserEventsController);
 
 // GET single event by ID
-router.get('/:id', authMiddleware, eventController.getEventByIdController);
+routrouter.get('/:id', authMiddleware, eventController.getEventByIdController);
+
 
 // UPDATE event
 router.put('/:id', authMiddleware, eventController.updateEventController);
