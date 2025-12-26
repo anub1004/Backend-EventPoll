@@ -17,7 +17,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: 'https://phenomenal-cranachan-b731fa.netlify.app/', // frontend URL
+  origin: 'https://eventman-alpha.vercel.app/', // frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true // if you are sending cookies or auth headers
 }));
