@@ -73,13 +73,24 @@ export async function respondToInvitationController(req, res) {
 
 
 
+// controllers/eventController.js
+import Event from '../models/Event.js';
 
 export const getEventByIdController = async (req, res) => {
   try {
-    const event = await eventService.getEventById(req.params.id);
-    res.status(200).json({ success: true, data: event });
-  } catch (error) {
-    res.status(error.status || 400).json({ success: false, message: error.message });
+    const { id } = req.params;
+
+    const event = await Event.findById(id)
+      .populate('creator', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('poll');
+
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    res.json({ data: event });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
