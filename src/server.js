@@ -14,14 +14,11 @@ dotenv.config();
 connectDB();
 
 const app = express();
-app.use(cors({
-  origin: "http://localhost:3000",
-  credentials: true
-}));
+
 
 // Middleware
 app.use(cors({
-  origin: 'https://eventman-alpha.vercel.app' || 'http://localhost:3000/', // frontend URL
+  origin: 'https://eventman-alpha.vercel.app' || 'http://localhost:3000', // frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true // if you are sending cookies or auth headers
 }));
