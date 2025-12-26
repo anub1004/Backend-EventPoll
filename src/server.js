@@ -17,7 +17,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:3000', // frontend URL
+  origin: 'https://phenomenal-cranachan-b731fa.netlify.app/', // frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true // if you are sending cookies or auth headers
 }));

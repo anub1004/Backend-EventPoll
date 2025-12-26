@@ -1,37 +1,94 @@
+import * as eventService from '../services/eventService.js';
+import { check, validationResult } from 'express-validator';
+
+export async function createEventController(req, res) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    // ✅ call service function, not controller
+    const event = await eventService.createEvent(req.body, req.user._id);
+
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+export async function getEventController(req, res) {
+  try {
+    const event = await eventService.getEventById(req.params.id);
+    res.status(200).json({ success: true, data: event });
+  } catch (error) {
+    res.status(404).json({ success: false, message: error.message });
+  }
+}
+
+export async function getUserEventsController(req, res) {
+  try {
+    const events = await eventService.getUserEvents(req.user._id);
+    res.status(200).json({ success: true, data: events });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+export async function updateEventController(req, res) {
+  try {
+    const event = await eventService.updateEvent(req.params.id, req.body, req.user._id);
+    res.status(200).json({ success: true, data: event });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+export async function deleteEventController(req, res) {
+  try {
+    const result = await eventService.deleteEvent(req.params.id, req.user._id);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+export async function inviteUserController(req, res) {
+  try {
+    const result = await eventService.inviteUser(req.params.id, req.body.email, req.user._id);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+export async function respondToInvitationController(req, res) {
+  try {
+    const result = await eventService.respondToInvitation(req.params.id, req.user._id, req.body.response);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+
+
+// controllers/eventController.js
 import Event from '../models/Event.js';
-import Poll from '../models/Poll.js';
-import User from '../models/User.js';
 
-/**
- * CREATE EVENT
- */
-export const createEvent = async (eventData, creatorId) => {
-  const { title, description, dateOptions, pollQuestion, pollOptions } = eventData;
 
-  const event = await Event.create({
-    title,
-    description,
-    creator: creatorId,
-    dateOptions,
-    participants: [{ user: creatorId }]
-  });
 
-  const poll = await Poll.create({
-    event: event._id,
-    question: pollQuestion,
-    options: pollOptions.map(text => ({ text, votes: [] }))
-  });
-
-  event.poll = poll._id;
-  await event.save();
-
-  return await Event.findById(event._id)
-    .populate('creator', 'name email')
-    .populate('participants.user', 'name email')
-    .populate('poll');
+export const getEventByIdController = async (req, res) => {
+  try {
+    const event = await getEventById(req.params.id);
+    res.status(200).json({ status: 'success', data: event });
+  } catch (err) {
+    res.status(err.status || 500).json({ status: 'error', message: err.message });
+  }
 };
-import Event from '../models/Event.js';
 
+
+// Other controllers remain the same (createEventController, updateEventController, etc.)
 export const getEventById = async (eventId) => {
   const event = await Event.findById(eventId)
     .populate('creator', 'name email')
@@ -44,174 +101,12 @@ export const getEventById = async (eventId) => {
     throw err;
   }
 
+  // Optional: Ensure poll always has options
+  if (event.poll) {
+    event.poll.options = event.poll.options || [];
+  }
+
   return event;
 };
 
-/**
- * GET EVENT BY ID
-
-
-/**
- * GET USER EVENTS (created + participating)
- */
-export const getUserEvents = async (userId) => {
-  const createdEvents = await Event.find({ creator: userId })
-    .populate('poll')
-    .sort('-createdAt');
-
-  const participatingEvents = await Event.find({
-    'participants.user': userId,
-    creator: { $ne: userId }
-  })
-    .populate('creator', 'name email')
-    .populate('poll')
-    .sort('-createdAt');
-
-  return { createdEvents, participatingEvents };
-};
-
-/**
- * UPDATE EVENT
- */
-export const updateEvent = async (eventId, updateData, userId) => {
-  const event = await Event.findById(eventId);
-
-  if (!event) {
-    const err = new Error('Event not found');
-    err.status = 404;
-    throw err;
-  }
-
-  if (event.creator.toString() !== userId.toString()) {
-    const err = new Error('Not authorized to update this event');
-    err.status = 403;
-    throw err;
-  }
-
-  Object.assign(event, updateData);
-  await event.save();
-
-  return await Event.findById(eventId)
-    .populate('creator', 'name email')
-    .populate('participants.user', 'name email')
-    .populate('poll');
-};
-
-/**
- * DELETE EVENT
- */
-export const deleteEvent = async (eventId, userId) => {
-  const event = await Event.findById(eventId);
-
-  if (!event) {
-    const err = new Error('Event not found');
-    err.status = 404;
-    throw err;
-  }
-
-  if (event.creator.toString() !== userId.toString()) {
-    const err = new Error('Not authorized to delete this event');
-    err.status = 403;
-    throw err;
-  }
-
-  await Poll.findByIdAndDelete(event.poll);
-  await Event.findByIdAndDelete(eventId);
-
-  return { message: 'Event deleted successfully' };
-};
-
-/**
- * INVITE USER
- */
-export const inviteUser = async (eventId, inviteeEmail, inviterId) => {
-  const event = await Event.findById(eventId);
-
-  if (!event) {
-    const err = new Error('Event not found');
-    err.status = 404;
-    throw err;
-  }
-
-  if (event.creator.toString() !== inviterId.toString()) {
-    const err = new Error('Only event creator can invite users');
-    err.status = 403;
-    throw err;
-  }
-
-  const invitee = await User.findOne({ email: inviteeEmail });
-
-  if (!invitee) {
-    const err = new Error('User not found');
-    err.status = 404;
-    throw err;
-  }
-
-  const alreadyParticipant = event.participants.some(
-    p => p.user.toString() === invitee._id.toString()
-  );
-
-  if (alreadyParticipant) {
-    const err = new Error('User is already a participant');
-    err.status = 400;
-    throw err;
-  }
-
-  const alreadyInvited = invitee.invitations.some(
-    inv => inv.event.toString() === eventId && inv.status === 'pending'
-  );
-
-  if (alreadyInvited) {
-    const err = new Error('User already has a pending invitation');
-    err.status = 400;
-    throw err;
-  }
-
-  invitee.invitations.push({
-    event: eventId,
-    status: 'pending'
-  });
-
-  await invitee.save();
-
-  return { message: 'Invitation sent successfully' };
-};
-
-/**
- * RESPOND TO INVITATION
- */
-export const respondToInvitation = async (eventId, userId, response) => {
-  if (!['accepted', 'rejected'].includes(response)) {
-    const err = new Error('Invalid invitation response');
-    err.status = 400;
-    throw err;
-  }
-
-  const user = await User.findById(userId);
-
-  const invitation = user.invitations.find(
-    inv => inv.event.toString() === eventId
-  );
-
-  if (!invitation) {
-    const err = new Error('Invitation not found');
-    err.status = 404;
-    throw err;
-  }
-
-  invitation.status = response;
-
-  if (response === 'accepted') {
-    const event = await Event.findById(eventId);
-    if (!event.participants.some(p => p.user.toString() === userId.toString())) {
-      event.participants.push({ user: userId });
-      await event.save();
-    }
-  }
-
-  await user.save();
-
-  return { message: `Invitation ${response}` };
-};
-import Event from '../models/Event.js';
 
