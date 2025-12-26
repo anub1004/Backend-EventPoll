@@ -1,37 +1,24 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
-export async function authMiddleware(req, res, next) {
+export const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        success: false,
-        message: "Authorization token missing"
-      });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
     const token = authHeader.split(" ")[1];
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.id).select("_id");
-
+    const user = await User.findById(decoded.id).select("-password");
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found"
-      });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    req.user = user; // ✅ THIS MAKES YOUR CONTROLLER WORK
-
+    req.user = user;
     next();
-  } catch (err) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid token"
-    });
+  } catch {
+    res.status(401).json({ success: false, message: "Invalid token" });
   }
-}
+};
