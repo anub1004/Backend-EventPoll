@@ -72,3 +72,15 @@ export async function respondToInvitationController(req, res) {
 }
 
 
+
+
+export const getEventByIdController = async (req, res) => {
+  try {
+    const event = await eventService.getEventById(req.params.id);
+    res.status(200).json({ success: true, data: event });
+  } catch (error) {
+    res.status(error.status || 400).json({ success: false, message: error.message });
+  }
+};
+
+// Other controllers remain the same (createEventController, updateEventController, etc.)
