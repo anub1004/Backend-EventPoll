@@ -16,11 +16,14 @@ connectDB();
 const app = express();
 
 // Middleware
+
 app.use(cors({
-  origin: 'https://eventman-alpha.vercel.app/', // frontend URL
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true // if you are sending cookies or auth headers
+  origin: ['https://eventman-alpha.vercel.app', 'http://localhost:3000'], // list all allowed origins
+  credentials: true, // if sending cookies or auth headers
 }));
+
+// ✅ Preflight handling for all routes
+app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
